@@ -54,11 +54,22 @@ const upload = multer({ storage });
 
 // Nodemailer transporter
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL,
     pass: process.env.PASS,
   },
+});
+
+// Verify SMTP on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ SMTP connection failed:", error.message);
+  } else {
+    console.log("✅ SMTP ready to send emails");
+  }
 });
 
 /* CONTACT FORM */
