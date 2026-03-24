@@ -61,7 +61,7 @@ app.post("/api/contact", async (req, res) => {
   const { name, email, phone, message } = req.body;
   try {
     const { error } = await resend.emails.send({
-      from: "Mastek Contact <onboarding@resend.dev>",
+      from: "Mastek Contact",
       to: [TO_EMAIL],
       subject: `New Contact: ${name}`,
       text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone}\nMessage:\n${message}`,
@@ -69,7 +69,7 @@ app.post("/api/contact", async (req, res) => {
     if (error) throw new Error(error.message);
     res.json({ success: true });
   } catch (error) {
-    console.error("❌ Contact error:", error.message);
+    console.error("Contact error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -85,7 +85,7 @@ app.post("/api/career", upload.single("resume"), async (req, res) => {
     const fileBase64 = fileBuffer.toString("base64");
 
     const { error } = await resend.emails.send({
-      from: "Mastek Careers <onboarding@resend.dev>",
+      from: "Mastek Career",
       to: [TO_EMAIL],
       subject: `New Application: ${firstName} ${lastName}`,
       text: `Name: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nPosition: ${job}\nMessage:\n${message}`,
@@ -99,10 +99,10 @@ app.post("/api/career", upload.single("resume"), async (req, res) => {
     if (error) throw new Error(error.message);
     res.json({ success: true });
   } catch (error) {
-    console.error("❌ Career error:", error.message);
+    console.error("Career error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () => console.log(` Server running on port ${PORT}`));
