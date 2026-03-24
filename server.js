@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import nodemailer from "nodemailer";
 import multer from "multer";
-import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
@@ -25,11 +24,23 @@ if (fs.existsSync(envPath)) {
       }
     }
   });
-  console.log("✅ .env loaded — EMAIL:", process.env.EMAIL ? "SET" : "MISSING");
+}
+
+// Ensure "uploads" directory exists (Important for Render)
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+  console.log("📁 Created 'uploads' directory");
 }
 
 const app = express();
-app.use(cors());
+
+// Updated CORS to be more permissive
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
 app.use(express.json());
 
 // Multer config
@@ -39,7 +50,9 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Nodemailer transporter
+// Nodemailer transporter (Check credentials)
+console.log("📧 Configuring transporter with:", process.env.EMAIL ? "Email Found" : "Email Missing");
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -48,22 +61,35 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Verify transporter on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ Transporter verification error:", error.message);
+  } else {
+    console.log("✅ Transporter is ready to send emails");
+  }
+});
+
 /* CONTACT FORM - Book Appointment */
 app.post("/api/contact", async (req, res) => {
   const { name, email, phone, message } = req.body;
-  console.log("📩 Contact form received:", { name, email, phone });
+  console.log("📩 Contact request from:", email);
 
   try {
+    if (!process.env.EMAIL || !process.env.PASS) {
+      throw new Error("Missing email credentials in environment variables");
+    }
+
     await transporter.sendMail({
       from: process.env.EMAIL,
       to: process.env.EMAIL,
-      subject: "New Contact Message",
+      subject: `New Contact: ${name}`,
       text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone}\nMessage:\n${message}`,
     });
     console.log("✅ Contact email sent!");
     res.json({ success: true });
   } catch (error) {
-    console.error("❌ Contact email error:", error.message);
+    console.error("❌ Contact error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -71,18 +97,21 @@ app.post("/api/contact", async (req, res) => {
 /* CAREER FORM - Apply */
 app.post("/api/career", upload.single("resume"), async (req, res) => {
   const { firstName, lastName, email, phone, job, message } = req.body;
-  console.log("📩 Career form received:", { firstName, lastName, email, job });
-  console.log("📎 Resume file:", req.file ? req.file.originalname : "NOT UPLOADED");
-
-  if (!req.file) {
-    return res.status(400).json({ success: false, message: "Resume is required" });
-  }
+  console.log("📩 Career request from:", email);
 
   try {
+    if (!process.env.EMAIL || !process.env.PASS) {
+      throw new Error("Missing email credentials in environment variables");
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Resume is required" });
+    }
+
     await transporter.sendMail({
       from: process.env.EMAIL,
       to: process.env.EMAIL,
-      subject: "New Job Application",
+      subject: `New Application: ${firstName} ${lastName} (${job})`,
       text: `Name: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nPosition: ${job}\nMessage:\n${message}`,
       attachments: [
         {
@@ -94,10 +123,12 @@ app.post("/api/career", upload.single("resume"), async (req, res) => {
     console.log("✅ Career email sent!");
     res.json({ success: true });
   } catch (error) {
-    console.error("❌ Career email error:", error.message);
+    console.error("❌ Career error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
