@@ -5,6 +5,10 @@ import multer from "multer";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
+import dns from "dns";
+
+// Force IPv4 DNS — Render free tier blocks IPv6 SMTP
+dns.setDefaultResultOrder("ipv4first");
 
 // Manual .env loading (dotenv v17 fix)
 const __filename = fileURLToPath(import.meta.url);
