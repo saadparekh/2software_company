@@ -52,11 +52,12 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Nodemailer transporter
+// Nodemailer transporter (port 465, IPv4 forced - Render free tier fix)
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
+  port: 465,
+  secure: true,
+  family: 4, // Force IPv4 — Render blocks IPv6 SMTP
   auth: {
     user: process.env.EMAIL,
     pass: process.env.PASS,
