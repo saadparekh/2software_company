@@ -26,22 +26,24 @@ if (fs.existsSync(envPath)) {
   });
 }
 
-// Ensure "uploads" directory exists (Important for Render)
+// Ensure "uploads" directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
-  console.log("📁 Created 'uploads' directory");
 }
 
 const app = express();
-
-// Updated CORS to be more permissive
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"]
-}));
+app.use(cors());
 app.use(express.json());
+
+// Health Check Route
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "online", 
+    email_configured: !!process.env.EMAIL,
+    time: new Date().toISOString()
+  });
+});
 
 // Multer config
 const storage = multer.diskStorage({
@@ -50,9 +52,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Nodemailer transporter (Check credentials)
-console.log("📧 Configuring transporter with:", process.env.EMAIL ? "Email Found" : "Email Missing");
-
+// Nodemailer transporter
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -61,32 +61,16 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Verify transporter on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ Transporter verification error:", error.message);
-  } else {
-    console.log("✅ Transporter is ready to send emails");
-  }
-});
-
-/* CONTACT FORM - Book Appointment */
+/* CONTACT FORM */
 app.post("/api/contact", async (req, res) => {
   const { name, email, phone, message } = req.body;
-  console.log("📩 Contact request from:", email);
-
   try {
-    if (!process.env.EMAIL || !process.env.PASS) {
-      throw new Error("Missing email credentials in environment variables");
-    }
-
     await transporter.sendMail({
       from: process.env.EMAIL,
       to: process.env.EMAIL,
       subject: `New Contact: ${name}`,
       text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone}\nMessage:\n${message}`,
     });
-    console.log("✅ Contact email sent!");
     res.json({ success: true });
   } catch (error) {
     console.error("❌ Contact error:", error.message);
@@ -94,33 +78,18 @@ app.post("/api/contact", async (req, res) => {
   }
 });
 
-/* CAREER FORM - Apply */
+/* CAREER FORM */
 app.post("/api/career", upload.single("resume"), async (req, res) => {
   const { firstName, lastName, email, phone, job, message } = req.body;
-  console.log("📩 Career request from:", email);
-
   try {
-    if (!process.env.EMAIL || !process.env.PASS) {
-      throw new Error("Missing email credentials in environment variables");
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: "Resume is required" });
-    }
-
+    if (!req.file) throw new Error("Resume required");
     await transporter.sendMail({
       from: process.env.EMAIL,
       to: process.env.EMAIL,
-      subject: `New Application: ${firstName} ${lastName} (${job})`,
+      subject: `New Application: ${firstName} ${lastName}`,
       text: `Name: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nPosition: ${job}\nMessage:\n${message}`,
-      attachments: [
-        {
-          filename: req.file.originalname,
-          path: req.file.path,
-        },
-      ],
+      attachments: [{ filename: req.file.originalname, path: req.file.path }],
     });
-    console.log("✅ Career email sent!");
     res.json({ success: true });
   } catch (error) {
     console.error("❌ Career error:", error.message);
@@ -129,6 +98,4 @@ app.post("/api/career", upload.single("resume"), async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Server running on port ${PORT}`));
