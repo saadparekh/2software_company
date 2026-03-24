@@ -1,14 +1,10 @@
 import express from "express";
 import cors from "cors";
-import nodemailer from "nodemailer";
 import multer from "multer";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
-import dns from "dns";
-
-// Force IPv4 DNS — Render free tier blocks IPv6 SMTP
-dns.setDefaultResultOrder("ipv4first");
+import { Resend } from "resend";
 
 // Manual .env loading (dotenv v17 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -30,6 +26,10 @@ if (fs.existsSync(envPath)) {
   });
 }
 
+// Resend client (HTTP-based, works on Render free tier)
+const resend = new Resend(process.env.RESEND_API_KEY);
+const TO_EMAIL = process.env.TO_EMAIL || "themastek.co@gmail.com";
+
 // Ensure "uploads" directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -42,10 +42,10 @@ app.use(express.json());
 
 // Health Check Route
 app.get("/api/health", (req, res) => {
-  res.json({ 
-    status: "online", 
-    email_configured: !!process.env.EMAIL,
-    time: new Date().toISOString()
+  res.json({
+    status: "online",
+    resend_configured: !!process.env.RESEND_API_KEY,
+    time: new Date().toISOString(),
   });
 });
 
@@ -56,37 +56,17 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Nodemailer transporter (port 465, IPv4 forced - Render free tier fix)
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  family: 4, // Force IPv4 — Render blocks IPv6 SMTP
-  auth: {
-    user: process.env.EMAIL,
-    pass: process.env.PASS,
-  },
-});
-
-// Verify SMTP on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ SMTP connection failed:", error.message);
-  } else {
-    console.log("✅ SMTP ready to send emails");
-  }
-});
-
 /* CONTACT FORM */
 app.post("/api/contact", async (req, res) => {
   const { name, email, phone, message } = req.body;
   try {
-    await transporter.sendMail({
-      from: process.env.EMAIL,
-      to: process.env.EMAIL,
+    const { error } = await resend.emails.send({
+      from: "Mastek Contact <onboarding@resend.dev>",
+      to: [TO_EMAIL],
       subject: `New Contact: ${name}`,
       text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone}\nMessage:\n${message}`,
     });
+    if (error) throw new Error(error.message);
     res.json({ success: true });
   } catch (error) {
     console.error("❌ Contact error:", error.message);
@@ -99,13 +79,24 @@ app.post("/api/career", upload.single("resume"), async (req, res) => {
   const { firstName, lastName, email, phone, job, message } = req.body;
   try {
     if (!req.file) throw new Error("Resume required");
-    await transporter.sendMail({
-      from: process.env.EMAIL,
-      to: process.env.EMAIL,
+
+    // Read the uploaded file as base64
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const fileBase64 = fileBuffer.toString("base64");
+
+    const { error } = await resend.emails.send({
+      from: "Mastek Careers <onboarding@resend.dev>",
+      to: [TO_EMAIL],
       subject: `New Application: ${firstName} ${lastName}`,
       text: `Name: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nPosition: ${job}\nMessage:\n${message}`,
-      attachments: [{ filename: req.file.originalname, path: req.file.path }],
+      attachments: [
+        {
+          filename: req.file.originalname,
+          content: fileBase64,
+        },
+      ],
     });
+    if (error) throw new Error(error.message);
     res.json({ success: true });
   } catch (error) {
     console.error("❌ Career error:", error.message);
